@@ -1,0 +1,14 @@
+node_modules
+dist
+.env
+*.db
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+# Excluir específicamente la clave de Firebase y el historial local
+prueba-ee140-firebase-adminsdk-fbsvc-10616e8fe4.json
+service-account.json
+memory.json
+*.log
+.DS_Store

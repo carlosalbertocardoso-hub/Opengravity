@@ -1,0 +1,26 @@
+{
+  "name": "opengravity",
+  "version": "1.0.0",
+  "description": "OpenGravity Personal AI Agent",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "npx tsx watch src/index.ts",
+    "build": "npx tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.1",
+    "firebase-admin": "^13.7.0",
+    "grammy": "^1.20.0",
+    "groq-sdk": "^0.3.3",
+    "openai": "^4.26.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/node": "^20.11.16",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3"
+  }
+}
