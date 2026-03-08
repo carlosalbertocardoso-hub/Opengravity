@@ -5,9 +5,9 @@ import { z } from 'zod';
 dotenv.config();
 
 const envSchema = z.object({
-  TELEGRAM_BOT_TOKEN: z.string(),
-  TELEGRAM_ALLOWED_USER_IDS: z.string().transform((str) => str.split(',').map((id) => id.trim())),
-  GROQ_API_KEY: z.string(),
+  TELEGRAM_BOT_TOKEN: z.string().min(1, "El token de Telegram no puede estar vacío"),
+  TELEGRAM_ALLOWED_USER_IDS: z.string().min(1, "Debes permitir al menos un ID de usuario").transform((str) => str.split(',').map((id) => id.trim())),
+  GROQ_API_KEY: z.string().min(1, "La clave de Groq no puede estar vacía"),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().default('openrouter/free'),
   DB_PATH: z.string().default('./memory.db'),
