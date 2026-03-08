@@ -29,14 +29,27 @@ function saveLocalDb(data: Data) {
 let db: admin.firestore.Firestore | null = null;
 
 try {
-  if (config.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(config.GOOGLE_APPLICATION_CREDENTIALS)) {
-    admin.initializeApp({
-      credential: admin.credential.cert(config.GOOGLE_APPLICATION_CREDENTIALS)
-    });
-    db = admin.firestore();
-    console.log('✅ Firebase initialized successfully');
+  const credentials = config.GOOGLE_APPLICATION_CREDENTIALS;
+  if (credentials) {
+    let serviceAccount;
+    // Miramos si es un path o un JSON directamente
+    if (credentials.startsWith('{')) {
+      serviceAccount = JSON.parse(credentials);
+    } else if (fs.existsSync(credentials)) {
+      serviceAccount = JSON.parse(fs.readFileSync(credentials, 'utf8'));
+    }
+
+    if (serviceAccount) {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      db = admin.firestore();
+      console.log('✅ Firebase initialized successfully');
+    } else {
+      console.warn('⚠️ Firebase credentials not valid. Falling back to local storage.');
+    }
   } else {
-    console.warn('⚠️ Firebase credentials not found. Falling back to local storage.');
+    console.warn('⚠️ Firebase environment variable not found. Falling back to local storage.');
   }
 } catch (error) {
   console.error('❌ Failed to initialize Firebase:', error);
