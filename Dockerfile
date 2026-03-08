@@ -4,17 +4,17 @@ FROM node:20-slim
 # Crear directorio de la app
 WORKDIR /app
 
-# Instalar dependencias necesarias para compilar y ejecutar
+# Instalar TODAS las dependencias (incluyendo devDependencies para tsc)
 COPY package*.json ./
-RUN npm install
+RUN npm install --include=dev
 
 # Copiar el resto del código
 COPY . .
 
-# Compilar TypeScript a JavaScript
-RUN npx tsc
+# Compilar TypeScript a JavaScript usando el script del package.json
+RUN npm run build
 
-# Hugging Face corre como usuario no root (1000)
+# Hugging Face requiere permisos específicos para el usuario 1000
 RUN chown -R 1000:1000 /app
 USER 1000
 
