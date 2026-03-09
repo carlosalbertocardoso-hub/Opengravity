@@ -8,21 +8,21 @@ const resolve4 = promisify(dns.resolve4);
 // This is necessary because Hugging Face networks sometimes have intermittent DNS resolution for specific domains.
 const originalLookup = dns.lookup;
 // @ts-ignore
-dns.lookup = (hostname: string, options: any, callback: any) => {
-  if (typeof options === 'function') {
-    callback = options;
-    options = {};
-  }
-  
+dns.lookup = (...args: any[]) => {
+  const hostname = args[0];
+  const options = args.length > 2 ? args[1] : (typeof args[1] === 'object' ? args[1] : {});
+  const callback = args[args.length - 1];
+
   if (hostname === 'api.telegram.org') {
     const ip = '149.154.167.220';
+    console.log(`🎯 [dns.lookup PATCH] api.telegram.org -> ${ip}`);
     if (options.all) {
       return callback(null, [{ address: ip, family: 4 }]);
     }
     return callback(null, ip, 4);
   }
   
-  return originalLookup(hostname, options, callback);
+  return (originalLookup as any)(...args);
 };
 
 // Now create the promisified version of the PATCHED lookup
@@ -54,7 +54,8 @@ try {
   const domains = ['api.telegram.org', 'google.com', 'huggingface.co'];
   for (const domain of domains) {
     try {
-      const { address } = await lookup(domain);
+      const result = await lookup(domain);
+      const address = typeof result === 'string' ? result : (result as any).address;
       console.log(`✅ [lookup] success: ${domain} -> ${address}`);
     } catch (dnsError: any) {
       console.error(`❌ [lookup] FAILED for ${domain}:`, dnsError.message);
@@ -67,6 +68,15 @@ try {
         console.error(`❌ [resolve4] ALSO FAILED for ${domain}:`, resolveError.message);
       }
     }
+  }
+
+  // Test if fetch (which grammy uses) respects the patch
+  console.log('🧪 Testing fetch() connectivity to Telegram...');
+  try {
+    const response = await fetch('https://api.telegram.org', { method: 'HEAD', signal: AbortSignal.timeout(5000) });
+    console.log(`✅ fetch() success: Status ${response.status}`);
+  } catch (fetchErr: any) {
+    console.error(`❌ fetch() FAILED: ${fetchErr.message}`);
   }
 
   // Direct IP connectivity diagnostic
