@@ -2,7 +2,6 @@ import http from 'http';
 import dns from 'dns';
 import { promisify } from 'util';
 
-const lookup = promisify(dns.lookup);
 const resolve4 = promisify(dns.resolve4);
 
 // MONKEY-PATCH DNS LOOKUP: If api.telegram.org fails, we force its known static IP.
@@ -25,6 +24,9 @@ dns.lookup = (hostname: string, options: any, callback: any) => {
   
   return originalLookup(hostname, options, callback);
 };
+
+// Now create the promisified version of the PATCHED lookup
+const lookup = promisify(dns.lookup);
 
 // Try to force Google DNS if local resolution fails
 try {
@@ -65,6 +67,24 @@ try {
         console.error(`❌ [resolve4] ALSO FAILED for ${domain}:`, resolveError.message);
       }
     }
+  }
+
+  // Direct IP connectivity diagnostic
+  console.log('🔌 Testing direct connection to Telegram IP (149.154.167.220)...');
+  try {
+    const res = await new Promise((resolve, reject) => {
+      const req = http.get('http://149.154.167.220', { timeout: 5000 }, (res) => {
+        resolve(res.statusCode);
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Timeout'));
+      });
+    });
+    console.log(`✅ Direct IP connection status: ${res}`);
+  } catch (err: any) {
+    console.error(`❌ Direct IP connection FAILED: ${err.message}`);
   }
 
   console.log('🌌 Loading bot modules...');

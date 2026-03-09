@@ -44,15 +44,32 @@ export const startBot = async () => {
     console.log(`🤖 Bot init with token prefix: ${tokenPreview}...`);
     
     console.log('🧹 Cleaning up any existing webhooks...');
+    const cleanupTimeout = setTimeout(() => {
+        console.warn('🕒 Webhook cleanup is taking longer than expected... possible network hang.');
+    }, 10000);
+
     try {
         await bot.api.deleteWebhook({ drop_pending_updates: true });
+        clearTimeout(cleanupTimeout);
         console.log('✅ Webhook deleted (or was not set). Pending updates dropped.');
     } catch (e) {
+        clearTimeout(cleanupTimeout);
         console.error('⚠️ Could not delete webhook:', e);
     }
 
     console.log('🤖 Starting Telegram Bot (Long Polling)...');
-    await bot.start();
+    console.log('📡 Calling bot.start()...');
+    const startTimeout = setTimeout(() => {
+        console.warn('🕒 bot.start() is taking longer than expected... waiting for connection.');
+    }, 15000);
+
+    await bot.start().then(() => {
+        clearTimeout(startTimeout);
+        console.log('🚀 Bot started successfully!');
+    }).catch(e => {
+        clearTimeout(startTimeout);
+        throw e;
+    });
 };
 
 // Command Handlers
