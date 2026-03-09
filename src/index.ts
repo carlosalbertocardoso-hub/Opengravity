@@ -1,8 +1,5 @@
 import http from 'http';
 import dns from 'dns';
-import { promisify } from 'util';
-
-const resolve4 = promisify(dns.resolve4);
 
 // MONKEY-PATCH DNS LOOKUP: Force api.telegram.org to its known static IP.
 // Hugging Face blocks DNS resolution for Telegram domains.
@@ -15,7 +12,6 @@ dns.lookup = (...args: any[]) => {
 
   if (hostname === 'api.telegram.org') {
     const ip = '149.154.167.220';
-    console.log(`🎯 [dns.lookup PATCH] api.telegram.org -> ${ip}`);
     if (options.all) {
       return callback(null, [{ address: ip, family: 4 }]);
     }
@@ -32,73 +28,133 @@ const WEBHOOK_PATH = '/webhook';
 const WEBHOOK_URL = `https://${SPACE_HOST}${WEBHOOK_PATH}`;
 
 console.log(`🎬 Initializing OpenGravity Webhook Server on port ${PORT}...`);
-console.log(`🔗 Webhook URL will be: ${WEBHOOK_URL}`);
+console.log(`🔗 Webhook URL: ${WEBHOOK_URL}`);
 
-try {
-  console.log('🌌 Loading bot modules...');
-  const { handleWebhook } = await import('./bot/index.js');
-  
-  if (!process.env.TELEGRAM_BOT_TOKEN) {
-    throw new Error('TELEGRAM_BOT_TOKEN environment variable is missing!');
-  }
-  
-  const tokenPrefix = process.env.TELEGRAM_BOT_TOKEN.substring(0, 5);
-  console.log(`🔑 Bot using token starting with: ${tokenPrefix}***`);
+// Dynamically import config and agent
+const { config } = await import('./config.js');
+const { Agent } = await import('./agent/index.js');
 
-  // Create HTTP server that handles both health checks AND webhook callbacks
-  const server = http.createServer(async (req, res) => {
-    // Webhook endpoint - Telegram sends updates here
-    if (req.url === WEBHOOK_PATH && req.method === 'POST') {
-      console.log('📨 Received webhook update from Telegram');
+const tokenPrefix = config.TELEGRAM_BOT_TOKEN.substring(0, 5);
+console.log(`🔑 Bot using token starting with: ${tokenPrefix}***`);
+console.log(`👤 Allowed user IDs: [${config.TELEGRAM_ALLOWED_USER_IDS.join(', ')}]`);
+
+// Create HTTP server
+const server = http.createServer(async (req, res) => {
+  // === WEBHOOK ENDPOINT ===
+  if (req.url === WEBHOOK_PATH && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+    req.on('end', async () => {
       try {
-        await handleWebhook(req, res);
-      } catch (e) {
-        console.error('❌ Webhook handler error:', e);
+        const update = JSON.parse(body);
+        const message = update.message;
+
+        // Ignore non-message updates
+        if (!message || !message.from) {
+          console.log('📨 Received non-message update, acknowledging.');
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('ok');
+          return;
+        }
+
+        const userId = message.from.id.toString();
+        const chatId = message.chat.id;
+        const text = message.text || '';
+
+        console.log(`📨 Webhook update: message from [${userId}] in chat [${chatId}]`);
+        console.log(`💬 Text: "${text}"`);
+
+        // Whitelist check
+        if (!config.TELEGRAM_ALLOWED_USER_IDS.includes(userId)) {
+          console.warn(`🚫 UNAUTHORIZED: User [${userId}] not in whitelist.`);
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('ok');
+          return;
+        }
+        console.log(`✅ User [${userId}] authorized.`);
+
+        // Handle /start command
+        if (text === '/start') {
+          console.log('🎬 /start command received');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            method: 'sendMessage',
+            chat_id: chatId,
+            text: '🚀 OpenGravity operativo. ¿En qué puedo ayudarte?'
+          }));
+          return;
+        }
+
+        // Handle /help command
+        if (text === '/help') {
+          console.log('❓ /help command received');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            method: 'sendMessage',
+            chat_id: chatId,
+            text: 'Soy tu agente personal. Puedes hablar conmigo normalmente.'
+          }));
+          return;
+        }
+
+        // Process with AI Agent
+        if (!text) {
+          res.writeHead(200, { 'Content-Type': 'text/plain' });
+          res.end('ok');
+          return;
+        }
+
+        console.log(`🧠 Invoking Agent for user ${userId}...`);
+        const agent = new Agent(userId);
+        const response = await agent.chat(text);
+        console.log(`📤 Agent response generated. Sending via webhook reply...`);
+
+        // Send reply via the webhook HTTP response body.
+        // Telegram executes this as an API call - NO outbound HTTPS needed!
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          method: 'sendMessage',
+          chat_id: chatId,
+          text: response || 'No he podido generar una respuesta.',
+          parse_mode: 'Markdown'
+        }));
+        console.log(`✨ Response sent via webhook reply!`);
+
+      } catch (error: any) {
+        console.error('❌ Error processing webhook:', error.message || error);
+        // Always respond 200 to Telegram to prevent retries
         if (!res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('Internal Server Error');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            method: 'sendMessage',
+            chat_id: JSON.parse(body)?.message?.chat?.id,
+            text: '⚠️ Error procesando tu mensaje. Inténtalo de nuevo.'
+          }));
         }
       }
-      return;
-    }
+    });
+    return;
+  }
 
-    // Health check / status endpoint
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'running',
-      mode: 'webhook',
-      webhook_url: WEBHOOK_URL,
-      set_webhook_link: `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook?url=${encodeURIComponent(WEBHOOK_URL)}&drop_pending_updates=true`,
-      message: 'OpenGravity is running in webhook mode! Visit the set_webhook_link in your browser to activate.'
-    }, null, 2));
-  });
+  // === HEALTH CHECK / STATUS ENDPOINT ===
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'running',
+    mode: 'webhook',
+    webhook_url: WEBHOOK_URL,
+    set_webhook_link: `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/setWebhook?url=${encodeURIComponent(WEBHOOK_URL)}&drop_pending_updates=true`,
+  }, null, 2));
+});
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`📡 Webhook server listening on port ${PORT}`);
-    console.log('');
-    console.log('╔══════════════════════════════════════════════════════════════╗');
-    console.log('║  🚀 WEBHOOK MODE ACTIVE                                     ║');
-    console.log('║                                                              ║');
-    console.log('║  To activate the bot, visit this URL in your browser:        ║');
-    console.log('║  (Copy the set_webhook_link from the JSON status page)       ║');
-    console.log('║                                                              ║');
-    console.log(`║  Or visit: https://${SPACE_HOST}                      ║`);
-    console.log('║  and copy the set_webhook_link URL.                          ║');
-    console.log('╚══════════════════════════════════════════════════════════════╝');
-    console.log('');
-  });
-
-} catch (error) {
-  console.error('💥 CRITICAL ERROR during startup:', error);
-  
-  // Still start a basic health check server so HF doesn't kill the Space
-  const fallbackServer = http.createServer((req, res) => {
-    res.writeHead(500, { 'Content-Type': 'text/plain' });
-    res.end(`OpenGravity startup failed: ${error}\n`);
-  });
-  fallbackServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`📡 Fallback health server listening on port ${PORT}`);
-  });
-  
-  setTimeout(() => process.exit(1), 5000);
-}
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`📡 Webhook server listening on port ${PORT}`);
+  console.log('');
+  console.log('╔══════════════════════════════════════════════════════════════╗');
+  console.log('║  🚀 WEBHOOK MODE ACTIVE - NO OUTBOUND HTTPS NEEDED         ║');
+  console.log('║                                                              ║');
+  console.log('║  Activate the bot by visiting this URL in your browser:      ║');
+  console.log(`║  https://${SPACE_HOST}                                       ║`);
+  console.log('║  Then copy the set_webhook_link from the JSON response.      ║');
+  console.log('╚══════════════════════════════════════════════════════════════╝');
+  console.log('');
+});
