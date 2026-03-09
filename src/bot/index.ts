@@ -42,8 +42,16 @@ bot.catch((err) => {
 export const startBot = async () => {
     const tokenPreview = config.TELEGRAM_BOT_TOKEN.substring(0, 5);
     console.log(`🤖 Bot init with token prefix: ${tokenPreview}...`);
-    console.log('🤖 Starting Telegram Bot (Long Polling)...');
     
+    console.log('🧹 Cleaning up any existing webhooks...');
+    try {
+        await bot.api.deleteWebhook({ drop_pending_updates: true });
+        console.log('✅ Webhook deleted (or was not set). Pending updates dropped.');
+    } catch (e) {
+        console.error('⚠️ Could not delete webhook:', e);
+    }
+
+    console.log('🤖 Starting Telegram Bot (Long Polling)...');
     await bot.start();
 };
 
