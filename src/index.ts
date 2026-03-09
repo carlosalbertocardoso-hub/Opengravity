@@ -1,4 +1,8 @@
 import http from 'http';
+import dns from 'dns';
+import { promisify } from 'util';
+
+const lookup = promisify(dns.lookup);
 
 // Hugging Face Spaces requires a server listening on port 7860
 const PORT = Number(process.env.PORT) || 7860;
@@ -14,6 +18,14 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 try {
+  console.log('🌐 Running network diagnostics...');
+  try {
+    const { address } = await lookup('api.telegram.org');
+    console.log(`✅ DNS Lookup success: api.telegram.org -> ${address}`);
+  } catch (dnsError) {
+    console.error('❌ DNS Lookup FAILED for api.telegram.org:', dnsError);
+  }
+
   console.log('🌌 Loading bot modules...');
   const { startBot } = await import('./bot/index.js');
   
