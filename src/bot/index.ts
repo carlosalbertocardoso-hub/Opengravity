@@ -26,15 +26,24 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
+bot.catch((err) => {
+  const ctx = err.ctx;
+  console.error(`❌ Error al manejar la actualización ${ctx.update.update_id}:`);
+  const e = err.error;
+  if (e instanceof GrammyError) {
+    console.error("Error en petición:", e.description);
+  } else if (e instanceof HttpError) {
+    console.error("No se pudo contactar con Telegram:", e);
+  } else {
+    console.error("Error desconocido:", e);
+  }
+});
+
 export const startBot = async () => {
     const tokenPreview = config.TELEGRAM_BOT_TOKEN.substring(0, 5);
     console.log(`🤖 Bot init with token prefix: ${tokenPreview}...`);
     console.log('🤖 Starting Telegram Bot (Long Polling)...');
     
-    bot.catch((err) => {
-        console.error('💥 BOT ERROR:', err);
-    });
-
     await bot.start();
 };
 
@@ -74,20 +83,3 @@ bot.on('message:text', async (ctx) => {
   }
 });
 
-bot.catch((err) => {
-  const ctx = err.ctx;
-  console.error(`❌ Error al manejar la actualización ${ctx.update.update_id}:`);
-  const e = err.error;
-  if (e instanceof GrammyError) {
-    console.error("Error en petición:", e.description);
-  } else if (e instanceof HttpError) {
-    console.error("No se pudo contactar con Telegram:", e);
-  } else {
-    console.error("Error desconocido:", e);
-  }
-});
-
-export const startBot = async () => {
-  console.log('🤖 Starting Telegram Bot (Long Polling)...');
-  await bot.start();
-};
