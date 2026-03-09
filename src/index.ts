@@ -5,6 +5,27 @@ import { promisify } from 'util';
 const lookup = promisify(dns.lookup);
 const resolve4 = promisify(dns.resolve4);
 
+// MONKEY-PATCH DNS LOOKUP: If api.telegram.org fails, we force its known static IP.
+// This is necessary because Hugging Face networks sometimes have intermittent DNS resolution for specific domains.
+const originalLookup = dns.lookup;
+// @ts-ignore
+dns.lookup = (hostname: string, options: any, callback: any) => {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  
+  if (hostname === 'api.telegram.org') {
+    const ip = '149.154.167.220';
+    if (options.all) {
+      return callback(null, [{ address: ip, family: 4 }]);
+    }
+    return callback(null, ip, 4);
+  }
+  
+  return originalLookup(hostname, options, callback);
+};
+
 // Try to force Google DNS if local resolution fails
 try {
   dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
