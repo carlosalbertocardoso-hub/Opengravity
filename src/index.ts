@@ -17,7 +17,13 @@ try {
   console.log('🌌 Loading bot modules...');
   const { startBot } = await import('./bot/index.js');
   
-  console.log('🤖 Starting Telegram Bot...');
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    throw new Error('TELEGRAM_BOT_TOKEN environment variable is missing!');
+  }
+  
+  const tokenPrefix = process.env.TELEGRAM_BOT_TOKEN.substring(0, 5);
+  console.log(`🔑 Bot using token starting with: ${tokenPrefix}***`);
+  
   await startBot();
 } catch (error) {
   console.error('💥 CRITICAL ERROR during startup:', error);

@@ -7,24 +7,36 @@ export const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
 // Whitelist Middleware
 bot.use(async (ctx, next) => {
   const userId = ctx.from?.id.toString();
-  console.log(`📩 Message received from ID: ${userId}`);
+  console.log(`📩 Message received from ID: [${userId}]`);
   
   if (!userId) {
-    console.warn("⚠️ Message received without userId");
+    console.warn("⚠️ Update received without userId (maybe a system update)");
     return;
   }
 
   // Debug whitelist
-  console.log(`🔐 Checking whitelist. Allowed: [${config.TELEGRAM_ALLOWED_USER_IDS.join(', ')}]`);
+  console.log(`🔐 Checking whitelist... User ID: [${userId}] | Allowed: [${config.TELEGRAM_ALLOWED_USER_IDS.join(', ')}]`);
   
   if (!config.TELEGRAM_ALLOWED_USER_IDS.includes(userId)) {
-    console.warn(`🚫 Unauthorized access attempt from ID: ${userId}. Not in whitelist.`);
+    console.warn(`🚫 UNAUTHORIZED: ID [${userId}] is NOT in whitelist.`);
     return;
   }
   
-  console.log(`✅ User ${userId} authorized.`);
+  console.log(`✅ User [${userId}] authorized. Processing message...`);
   await next();
 });
+
+export const startBot = async () => {
+    const tokenPreview = config.TELEGRAM_BOT_TOKEN.substring(0, 5);
+    console.log(`🤖 Bot init with token prefix: ${tokenPreview}...`);
+    console.log('🤖 Starting Telegram Bot (Long Polling)...');
+    
+    bot.catch((err) => {
+        console.error('💥 BOT ERROR:', err);
+    });
+
+    await bot.start();
+};
 
 // Command Handlers
 bot.command('start', (ctx) => {
