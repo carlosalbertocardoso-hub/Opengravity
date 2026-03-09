@@ -4,6 +4,14 @@ import { promisify } from 'util';
 
 const lookup = promisify(dns.lookup);
 
+// Try to force Google DNS if local resolution fails
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+  console.log('📡 DNS servers set to: 8.8.8.8, 8.8.4.4, 1.1.1.1');
+} catch (e) {
+  console.warn('⚠️ Could not set DNS servers manually:', e);
+}
+
 // Hugging Face Spaces requires a server listening on port 7860
 const PORT = Number(process.env.PORT) || 7860;
 console.log(`🎬 Initializing OpenGravity Health Server on port ${PORT}...`);
@@ -19,11 +27,14 @@ server.listen(PORT, '0.0.0.0', () => {
 
 try {
   console.log('🌐 Running network diagnostics...');
-  try {
-    const { address } = await lookup('api.telegram.org');
-    console.log(`✅ DNS Lookup success: api.telegram.org -> ${address}`);
-  } catch (dnsError) {
-    console.error('❌ DNS Lookup FAILED for api.telegram.org:', dnsError);
+  const domains = ['api.telegram.org', 'google.com', 'huggingface.co'];
+  for (const domain of domains) {
+    try {
+      const { address } = await lookup(domain);
+      console.log(`✅ DNS Lookup success: ${domain} -> ${address}`);
+    } catch (dnsError: any) {
+      console.error(`❌ DNS Lookup FAILED for ${domain}:`, dnsError.message);
+    }
   }
 
   console.log('🌌 Loading bot modules...');
