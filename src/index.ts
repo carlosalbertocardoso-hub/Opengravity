@@ -3,6 +3,7 @@ import dns from 'dns';
 import { promisify } from 'util';
 
 const lookup = promisify(dns.lookup);
+const resolve4 = promisify(dns.resolve4);
 
 // Try to force Google DNS if local resolution fails
 try {
@@ -31,9 +32,17 @@ try {
   for (const domain of domains) {
     try {
       const { address } = await lookup(domain);
-      console.log(`✅ DNS Lookup success: ${domain} -> ${address}`);
+      console.log(`✅ [lookup] success: ${domain} -> ${address}`);
     } catch (dnsError: any) {
-      console.error(`❌ DNS Lookup FAILED for ${domain}:`, dnsError.message);
+      console.error(`❌ [lookup] FAILED for ${domain}:`, dnsError.message);
+      
+      // Try resolve4 as a fallback
+      try {
+        const addresses = await resolve4(domain);
+        console.log(`✅ [resolve4] success: ${domain} -> ${addresses[0]}`);
+      } catch (resolveError: any) {
+        console.error(`❌ [resolve4] ALSO FAILED for ${domain}:`, resolveError.message);
+      }
     }
   }
 
