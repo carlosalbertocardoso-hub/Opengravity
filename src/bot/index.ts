@@ -1,4 +1,4 @@
-import { Bot, GrammyError, HttpError } from 'grammy';
+import { Bot, GrammyError, HttpError, webhookCallback } from 'grammy';
 import { config } from '../config.js';
 import { Agent } from '../agent/index.js';
 
@@ -39,39 +39,6 @@ bot.catch((err) => {
   }
 });
 
-export const startBot = async () => {
-    const tokenPreview = config.TELEGRAM_BOT_TOKEN.substring(0, 5);
-    console.log(`🤖 Bot init with token prefix: ${tokenPreview}...`);
-    
-    console.log('🧹 Cleaning up any existing webhooks...');
-    const cleanupTimeout = setTimeout(() => {
-        console.warn('🕒 Webhook cleanup is taking longer than expected... possible network hang.');
-    }, 10000);
-
-    try {
-        await bot.api.deleteWebhook({ drop_pending_updates: true });
-        clearTimeout(cleanupTimeout);
-        console.log('✅ Webhook deleted (or was not set). Pending updates dropped.');
-    } catch (e) {
-        clearTimeout(cleanupTimeout);
-        console.error('⚠️ Could not delete webhook:', e);
-    }
-
-    console.log('🤖 Starting Telegram Bot (Long Polling)...');
-    console.log('📡 Calling bot.start()...');
-    const startTimeout = setTimeout(() => {
-        console.warn('🕒 bot.start() is taking longer than expected... waiting for connection.');
-    }, 15000);
-
-    await bot.start().then(() => {
-        clearTimeout(startTimeout);
-        console.log('🚀 Bot started successfully!');
-    }).catch(e => {
-        clearTimeout(startTimeout);
-        throw e;
-    });
-};
-
 // Command Handlers
 bot.command('start', (ctx) => {
   console.log('🎬 /start command received');
@@ -89,14 +56,15 @@ bot.on('message:text', async (ctx) => {
   const text = ctx.message.text;
   console.log(`💬 Processing text message from ${userId}: "${text}"`);
 
-  // Show typing status
-  await ctx.replyWithChatAction('typing').catch(e => console.error('Error sending chat action:', e));
+  // NOTE: We skip replyWithChatAction('typing') in webhook mode
+  // because only ONE API call can go through the webhook response,
+  // and we want that to be the actual reply to the user.
 
   try {
     console.log(`🧠 Invoking Agent for user ${userId}...`);
     const agent = new Agent(userId);
     const response = await agent.chat(text);
-    console.log(`📤 Agent response generated. Sending to Telegram...`);
+    console.log(`📤 Agent response generated. Sending via webhook reply...`);
     await ctx.reply(response || "No he podido generar una respuesta.");
     console.log(`✨ Response sent successfully.`);
   } catch (error: any) {
@@ -104,7 +72,11 @@ bot.on('message:text', async (ctx) => {
     if (error.response?.data) {
       console.error('Detalles del error:', JSON.stringify(error.response.data, null, 2));
     }
-    await ctx.reply('⚠️ Hubo un error al procesar tu mensaje. Revisa la terminal para más detalles.').catch(e => console.error('Error sending error reply:', e));
+    await ctx.reply('⚠️ Hubo un error al procesar tu mensaje.').catch(e => console.error('Error sending error reply:', e));
   }
 });
 
+// Export webhook callback handler for HTTP server
+// Grammy's webhookCallback automatically sends the FIRST API call per update
+// as the HTTP response body, avoiding outbound HTTPS calls entirely!
+export const handleWebhook = webhookCallback(bot, 'http');
