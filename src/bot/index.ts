@@ -4,6 +4,24 @@ import { Agent } from '../agent/index.js';
 
 export const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
 
+// Manually set bot info to avoid outbound getMe call.
+// Hugging Face blocks outbound HTTPS to api.telegram.org,
+// so we MUST provide this info manually.
+bot.botInfo = {
+  id: 8707490449,
+  is_bot: true,
+  first_name: 'OpenGravity',
+  username: 'Opengravity82bot',
+  can_join_groups: true,
+  can_read_all_group_messages: false,
+  supports_inline_queries: false,
+  can_connect_to_business: false,
+  has_main_web_app: false,
+  has_topics_enabled: false,
+  allows_users_to_create_topics: false,
+} as any;
+console.log('✅ Bot info set manually (skipping getMe API call)');
+
 // Whitelist Middleware
 bot.use(async (ctx, next) => {
   const userId = ctx.from?.id.toString();
